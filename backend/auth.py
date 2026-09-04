@@ -14,13 +14,26 @@ DEV_USER = "local-dev-user"
 
 _jwks: jwt.PyJWKClient | None = None
 
-def configure() -> None:
+def mode() -> str:
+    return "clerk" if _jwks is not None else "dev-bypass"
+
+def _is_local(origin: str) -> bool:
+    return "localhost" in origin or "127.0.0.1" in origin
+
+def configure(origins: list[str] | None = None) -> None:
     # called at startup so a misconfigured server fails to boot rather than quietly serving everyone's history to everyone
     global _jwks
     if CLERK_ISSUER:
         _jwks = jwt.PyJWKClient(f"{CLERK_ISSUER}/.well-known/jwks.json", cache_keys=True)
         log.info("auth: verifying Clerk tokens issued by %s", CLERK_ISSUER)
     elif DEV_BYPASS:
+        public = [o for o in (origins or []) if not _is_local(o)]
+        if public:
+            raise RuntimeError(
+                f"AUTH_DEV_BYPASS is on while ALLOWED_ORIGINS includes {public}. "
+                "That would hand every visitor the same shared history. Set "
+                "CLERK_ISSUER instead, or drop the public origins."
+            )
         log.warning("auth: AUTH_DEV_BYPASS is on, every request is %r", DEV_USER)
     else:
         raise RuntimeError(

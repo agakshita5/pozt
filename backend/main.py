@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    auth.configure()
+    auth.configure(ALLOWED_ORIGINS)
     db.init()
     yield
 
@@ -134,7 +134,7 @@ def _run_model(run: dict) -> Run:
 
 @app.get("/api/health")
 async def health() -> dict:
-    return {"ok": True, "model": generate.MODEL}
+    return {"ok": True, "model": generate.MODEL, "auth": auth.mode()}
 
 @app.get("/api/runs", response_model=list[RunSummary])
 async def get_runs(user: str = Depends(auth.current_user)) -> list[RunSummary]:
