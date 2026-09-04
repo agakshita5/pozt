@@ -2,12 +2,18 @@ import type { Platform, Post, Run, RunSummary, SourceType, Tone } from "./types"
 
 const DEV = process.env.NODE_ENV === "development";
 
-// Next inlines this at build time, so a missing value on Vercel ships a bundle
-// pointing at the visitor's own machine. Say so rather than fail obscurely.
+// Next inlines this at build time, so a missing value on Vercel ships a bundle pointing at the visitor's own machine. 
 const CONFIGURED = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
 const MISCONFIGURED = !DEV && !CONFIGURED;
 
 const BASE = CONFIGURED ?? "http://localhost:8000";
+
+type TokenGetter = () => Promise<string | null>;
+let getToken: TokenGetter | null = null;
+
+export function setTokenGetter(fn: TokenGetter | null) {
+  getToken = fn;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -25,6 +31,7 @@ const OFFLINE = DEV
 
 // shown when the API returns no readable message of its own
 const FALLBACK: Record<string, string> = {
+  401: "Please sign in to continue.",
   404: "That is no longer available.",
   429: "Too many requests at once. Wait a moment and try again.",
   500: "Something went wrong on our end. Try again in a moment.",
@@ -54,11 +61,17 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new ApiError(OFFLINE, 0);
   }
 
+  const token = getToken ? await getToken().catch(() => null) : null;
+
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
     });
   } catch (e) {
     console.error(`${path} failed to reach ${BASE}`, e);

@@ -1,3 +1,4 @@
+import { ClerkProvider } from "@clerk/nextjs";
 import type { Metadata } from "next";
 import { Inter, Space_Grotesk } from "next/font/google";
 import "./globals.css";
@@ -24,8 +25,10 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
-      <body className="h-full antialiased">{children}</body>
-    </html>
+    <ClerkProvider>
+      <html lang="en" className={`${spaceGrotesk.variable} ${inter.variable}`}>
+        <body className="h-full antialiased">{children}</body>
+      </html>
+    </ClerkProvider>
   );
 }

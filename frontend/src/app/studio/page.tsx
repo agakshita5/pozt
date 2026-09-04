@@ -1,5 +1,6 @@
 "use client";
 
+import { UserButton, useAuth } from "@clerk/nextjs";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
@@ -7,7 +8,7 @@ import InputPane from "@/components/InputPane";
 import OutputPane from "@/components/OutputPane";
 import Sidebar from "@/components/Sidebar";
 import { sidebarStore } from "@/lib/sidebarStore";
-import { createRun, deleteRun, errorMessage, getRun, listRuns, regeneratePost} from "@/lib/api";
+import { createRun, deleteRun, errorMessage, getRun, listRuns, regeneratePost, setTokenGetter} from "@/lib/api";
 import type { Platform, Run, RunSummary, SourceType, Tone } from "@/lib/types";
 
 export default function Home() {
@@ -18,6 +19,9 @@ export default function Home() {
     sidebarStore.getSnapshot,
     sidebarStore.getServerSnapshot,
   );
+
+  const { isLoaded, getToken } = useAuth();
+  setTokenGetter(() => getToken());
 
   const [sourceType, setSourceType] = useState<SourceType>("url");
   const [url, setUrl] = useState("");
@@ -39,8 +43,11 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    void refreshRuns();
-  }, [refreshRuns]);
+    if (!isLoaded) return;
+    listRuns()
+      .then(setRuns)
+      .catch((e) => setError(errorMessage(e)));
+  }, [isLoaded]);
 
   function startNew() {
     setRun(null);
@@ -157,6 +164,9 @@ export default function Home() {
             <ArrowLeft size={13} />
             Home
           </Link>
+          <div className="ml-4 flex items-center">
+            <UserButton appearance={{ elements: { avatarBox: "h-7 w-7" } }} />
+          </div>
         </header>
 
         <div className="flex min-h-0 flex-1 flex-col bg-surface lg:flex-row">
