@@ -1,6 +1,9 @@
 # pull readable article text out of a blog URL
 
+import ipaddress
 import logging
+import socket
+from urllib.parse import urlparse
 
 import httpx
 import trafilatura
@@ -14,28 +17,62 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/122.0 Safari/537.36"
 )
 
+MAX_REDIRECTS = 5
+MAX_BYTES = 4_000_000
+
 class ExtractionError(Exception):
     """The URL could not be fetched or held no readable article text."""
 
-def _fetch(url: str) -> str:
+def _require_public(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise ExtractionError("Only http and https links can be read.")
+    host = parsed.hostname
+    if not host:
+        raise ExtractionError("That does not look like a valid URL.")
     try:
-        resp = httpx.get(
-            url,
-            follow_redirects=True,
-            timeout=20.0,
-            headers={"User-Agent": USER_AGENT},
-        )
-        resp.raise_for_status()
-    except httpx.HTTPStatusError as exc:
-        raise ExtractionError(
-            f"The site returned {exc.response.status_code} for that URL."
-        ) from exc
-    except httpx.HTTPError as exc:
-        log.warning("fetch failed for %s: %s", url, exc)
+        addresses = socket.getaddrinfo(host, None)
+    except socket.gaierror as exc:
+        log.warning("could not resolve %s: %s", host, exc)
         raise ExtractionError(
             "Could not reach that URL. Check the link, or paste the article text instead."
         ) from exc
-    return resp.text
+    for info in addresses:
+        ip = ipaddress.ip_address(info[4][0])
+        if not ip.is_global:
+            log.warning("blocked non-public address %s for %s", ip, url)
+            raise ExtractionError("That URL points to a private address, so it cannot be read.")
+
+def _fetch(url: str) -> str:
+    with httpx.Client(
+        follow_redirects=False, timeout=20.0, headers={"User-Agent": USER_AGENT}
+    ) as client:
+        for _ in range(MAX_REDIRECTS + 1):
+            _require_public(url)
+            try:
+                with client.stream("GET", url) as resp:
+                    if resp.is_redirect and resp.next_request is not None:
+                        url = str(resp.next_request.url)
+                        continue
+                    resp.raise_for_status()
+                    chunks: list[bytes] = []
+                    total = 0
+                    for chunk in resp.iter_bytes():
+                        total += len(chunk)
+                        if total > MAX_BYTES:
+                            raise ExtractionError("That page is too large to read.")
+                        chunks.append(chunk)
+                    return b"".join(chunks).decode(resp.encoding or "utf-8", "replace")
+            except httpx.HTTPStatusError as exc:
+                raise ExtractionError(
+                    f"The site returned {exc.response.status_code} for that URL."
+                ) from exc
+            except httpx.HTTPError as exc:
+                log.warning("fetch failed for %s: %s", url, exc)
+                raise ExtractionError(
+                    "Could not reach that URL. Check the link, or paste the article text instead."
+                ) from exc
+    raise ExtractionError("That URL redirected too many times.")
 
 def _soup_fallback(html: str) -> tuple[str, str]:
     soup = BeautifulSoup(html, "html.parser")
