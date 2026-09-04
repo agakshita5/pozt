@@ -1,6 +1,13 @@
 import type { Platform, Post, Run, RunSummary, SourceType, Tone } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8000";
+const DEV = process.env.NODE_ENV === "development";
+
+// Next inlines this at build time, so a missing value on Vercel ships a bundle
+// pointing at the visitor's own machine. Say so rather than fail obscurely.
+const CONFIGURED = process.env.NEXT_PUBLIC_API_BASE?.replace(/\/$/, "");
+const MISCONFIGURED = !DEV && !CONFIGURED;
+
+const BASE = CONFIGURED ?? "http://localhost:8000";
 
 export class ApiError extends Error {
   constructor(
@@ -12,7 +19,11 @@ export class ApiError extends Error {
   }
 }
 
-/** Shown when the API returns no readable message of its own. */
+const OFFLINE = DEV
+  ? `Cannot reach the backend at ${BASE}. Start it with: cd backend && ../venv/bin/uvicorn main:app --reload --port 8000`
+  : "Can't reach PoZt right now. Check your connection and try again.";
+
+// shown when the API returns no readable message of its own
 const FALLBACK: Record<string, string> = {
   404: "That is no longer available.",
   429: "Too many requests at once. Wait a moment and try again.",
@@ -23,7 +34,6 @@ const FALLBACK: Record<string, string> = {
   default: "Something went wrong. Try again.",
 };
 
-/** Every message the UI shows comes through here, so nothing internal leaks. */
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) return e.message;
   console.error(e);
@@ -31,6 +41,19 @@ export function errorMessage(e: unknown): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  if (MISCONFIGURED) {
+    console.error("NEXT_PUBLIC_API_BASE was not set at build time.");
+    throw new ApiError(OFFLINE, 0);
+  }
+  if (
+    typeof window !== "undefined" &&
+    window.location.protocol === "https:" &&
+    BASE.startsWith("http://")
+  ) {
+    console.error(`Blocked: ${BASE} is http, this page is https.`);
+    throw new ApiError(OFFLINE, 0);
+  }
+
   let res: Response;
   try {
     res = await fetch(`${BASE}${path}`, {
@@ -39,15 +62,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     });
   } catch (e) {
     console.error(`${path} failed to reach ${BASE}`, e);
-    throw new ApiError(
-      "Can't reach Post Studio right now. Check your connection and try again.",
-      0,
-    );
+    throw new ApiError(OFFLINE, 0);
   }
 
   if (!res.ok) {
-    // The API sends a message written for the reader; anything else it can
-    // return is meant for the server log, so it never reaches the screen.
     let detail = "";
     try {
       const body = await res.json();
@@ -56,7 +74,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       /* no body to read */
     }
     if (!detail) {
-      console.error(`${path} → ${res.status} ${res.statusText}`);
+      console.error(`${path} -> ${res.status} ${res.statusText}`);
       detail = FALLBACK[res.status] ?? FALLBACK.default;
     }
     throw new ApiError(detail, res.status);
@@ -71,11 +89,7 @@ export const getRun = (id: string) => request<Run>(`/api/runs/${id}`);
 export const deleteRun = (id: string) =>
   request<{ deleted: string }>(`/api/runs/${id}`, { method: "DELETE" });
 
-export const createRun = (
-  sourceType: SourceType,
-  source: string,
-  tone: Tone,
-) =>
+export const createRun = ( sourceType: SourceType, source: string, tone: Tone) =>
   request<Run>("/api/runs", {
     method: "POST",
     body: JSON.stringify({ source_type: sourceType, source, tone }),
