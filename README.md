@@ -34,15 +34,23 @@ cd frontend && npm run dev
 | Groq calls, strict JSON schema | `backend/generate.py` |
 | SQLite history and the regeneration budget | `backend/db.py` |
 | REST endpoints | `backend/main.py` |
+| Clerk token verification | `backend/auth.py` |
 | Platform mock-ups | `frontend/src/components/previews/` |
 
 ## Config
 
-`backend/.env` — `GROQ_API_KEY` (required), `GROQ_MODEL` (defaults to
-`openai/gpt-oss-120b`; `openai/gpt-oss-20b` is the cheaper fallback).
+`backend/.env` — `GROQ_API_KEY` and `CLERK_ISSUER` are required; the server
+refuses to start without the second unless `AUTH_DEV_BYPASS=1`. `GROQ_MODEL`
+defaults to `openai/gpt-oss-120b` (`openai/gpt-oss-20b` is the cheaper
+fallback). Rate limits, body size and `DB_PATH` are in `.env.example`.
 
-`frontend/.env.local` — `NEXT_PUBLIC_API_BASE`, only if the backend is not on
-port 8000.
+`frontend/.env.local` — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and
+`CLERK_SECRET_KEY` are required; `NEXT_PUBLIC_API_BASE` only if the backend is
+not on port 8000.
+
+Clerk gates `/studio` only, so the landing page stays open to anyone with the
+link. History is scoped to the verified user id, and generation is measured per
+account.
 
 ## API
 
