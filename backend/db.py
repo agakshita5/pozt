@@ -1,10 +1,11 @@
 import hashlib
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "data" / "app.db"
+DB_PATH = Path(os.getenv("DB_PATH") or Path(__file__).parent / "data" / "app.db")
 
 SCHEMA = """
     CREATE TABLE IF NOT EXISTS runs (

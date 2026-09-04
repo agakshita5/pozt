@@ -1,4 +1,5 @@
 import logging
+import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -26,9 +27,30 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Blog to Social Post Studio", lifespan=lifespan)
 
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv(
+        "ALLOWED_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000"
+    ).split(",")
+    if o.strip()
+]
+
+@app.middleware("http")
+async def catch_unhandled(request: Request, call_next):
+    try:
+        return await call_next(request)
+    except Exception:
+        log.exception("unhandled error on %s", request.url.path)
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Something went wrong on our end. Try again in a moment."},
+        )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
+    # set to something like https://.*\.vercel\.app$ to let previews through
+    allow_origin_regex=os.getenv("ALLOWED_ORIGIN_REGEX") or None,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -37,11 +59,6 @@ app.add_middleware(
 async def bad_request(request: Request, exc: RequestValidationError) -> JSONResponse:
     log.warning("invalid request to %s: %s", request.url.path, exc)
     return JSONResponse(status_code=422, content={"detail": "That input was not something I can work with."})
-
-@app.exception_handler(Exception)
-async def unhandled(request: Request, exc: Exception) -> JSONResponse:
-    log.exception("unhandled error on %s", request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Something went wrong on our end. Try again in a moment."})
 
 def _post_model(record: dict) -> Post:
     return Post(
