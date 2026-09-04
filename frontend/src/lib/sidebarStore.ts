@@ -1,12 +1,7 @@
-const KEY = "postStudio.sidebarCollapsed";
+const KEY = "pozt.sidebarCollapsed";
 
 let listeners: Array<() => void> = [];
 
-/**
- * The collapsed flag lives in localStorage, which React cannot see. Reading it
- * in an effect would set state on mount and cascade a render, so it is exposed
- * as an external store instead and read with useSyncExternalStore.
- */
 export const sidebarStore = {
   subscribe(callback: () => void) {
     listeners.push(callback);
@@ -23,8 +18,7 @@ export const sidebarStore = {
       return false;
     }
   },
-
-  // The server has no localStorage; start expanded and let the client correct it.
+  
   getServerSnapshot(): boolean {
     return false;
   },

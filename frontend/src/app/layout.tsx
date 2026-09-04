@@ -15,7 +15,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Post Studio",
+  title: "PoZt",
   description:
     "Turn any blog post into an X thread, an Instagram caption, a LinkedIn post and a Reddit thread, each in its native preview.",
 };
