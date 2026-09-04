@@ -1,19 +1,9 @@
-import type {
-  InstagramPayload,
-  LinkedInPayload,
-  Platform,
-  RedditPayload,
-  XPayload,
-} from "./types";
+import type {InstagramPayload, LinkedInPayload, Platform, RedditPayload, XPayload} from "./types";
 
 const tags = (hashtags: string[] = []) =>
   hashtags.map((h) => `#${h.replace(/^#/, "")}`).join(" ");
 
-/** Flatten a post into the text you would actually paste into the app. */
-export function toPlainText(
-  platform: Platform,
-  payload: Record<string, unknown>,
-): string {
+export function toPlainText(platform: Platform, payload: Record<string, unknown>): string {
   switch (platform) {
     case "x": {
       const { tweets = [], hashtags = [] } = payload as unknown as XPayload;
@@ -21,7 +11,6 @@ export function toPlainText(
       if (parts.length && tags(hashtags)) {
         parts[parts.length - 1] += `\n\n${tags(hashtags)}`;
       }
-      // Blank line between tweets so each block is easy to grab one at a time.
       return parts.join("\n\n");
     }
     case "instagram": {

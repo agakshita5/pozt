@@ -6,15 +6,10 @@ import { useEffect, useRef, useState } from "react";
 export interface SelectOption<T extends string> {
   value: T;
   label: string;
-  /** Shows a check on the row, e.g. a tone already generated for this article. */
+  // shows a check on the row, e.g. a tone already generated for this article
   done?: boolean;
 }
 
-/**
- * A listbox rather than a native <select>, because the tone rows need to carry
- * a check icon for tones that already have saved posts, and option elements
- * cannot hold an SVG.
- */
 export default function Select<T extends string>({
   options,
   value,

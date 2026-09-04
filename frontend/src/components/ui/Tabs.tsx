@@ -6,14 +6,10 @@ export interface TabItem<T extends string> {
   value: T;
   label: string;
   icon?: ReactNode;
-  /** Small red dot on the tab, for the over-limit warning. */
+  // small red dot on the tab, for the over-limit warning
   flagged?: boolean;
 }
 
-/**
- * Underline tabs with a cobalt indicator. Shared by the input source tabs and
- * the platform tabs so the two rows read as the same control.
- */
 export default function Tabs<T extends string>({
   items,
   value,

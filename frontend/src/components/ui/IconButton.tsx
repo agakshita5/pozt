@@ -5,7 +5,7 @@ import type { ButtonHTMLAttributes } from "react";
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon: LucideIcon;
-  /** Required: every icon-only control needs a name for hover and for screen readers. */
+  // Required: every icon-only control needs a name for hover and for screen readers
   title: string;
   size?: number;
   danger?: boolean;

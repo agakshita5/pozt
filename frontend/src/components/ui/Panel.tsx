@@ -1,9 +1,5 @@
 import type { ReactNode } from "react";
 
-/**
- * A surface with a hairline and a radius. `header` gets its own row with a
- * dividing rule, so panes and the landing's product shot share one frame.
- */
 export default function Panel({
   header,
   children,

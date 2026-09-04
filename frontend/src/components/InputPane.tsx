@@ -25,7 +25,7 @@ interface Props {
   loading: boolean;
   error: string | null;
   notice: string | null;
-  /** This input already has posts at the selected tone, so Generate is a no-op. */
+  // this input already has posts at the selected tone, so Generate is a no-op
   alreadyGenerated: boolean;
   generatedTones: Tone[];
 }

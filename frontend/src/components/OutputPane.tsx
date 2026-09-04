@@ -10,12 +10,7 @@ import Skeleton from "./ui/Skeleton";
 import Tabs from "./ui/Tabs";
 import { PLATFORM_META } from "@/lib/platforms";
 import { toPlainText } from "@/lib/serialize";
-import {
-  PLATFORMS,
-  type Platform,
-  type PostsForTone,
-  type Tone,
-} from "@/lib/types";
+import { PLATFORMS, type Platform, type PostsForTone, type Tone } from "@/lib/types";
 
 function LoadingState() {
   return (
@@ -63,8 +58,7 @@ export default function OutputPane({
 }: Props) {
   const post = posts?.[active] ?? null;
 
-  // Key the "Copied" flash to the exact post that was copied, so switching tabs
-  // or regenerating clears it without an effect.
+  // Key the "Copied" flash to the exact post that was copied, so switching tabs or regenerating clears it without an effect.
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   const postKey = post ? `${active}:${post.tone}:${post.regens_remaining}` : "";
   const copied = postKey !== "" && copiedKey === postKey;

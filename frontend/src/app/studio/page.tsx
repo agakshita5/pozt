@@ -39,9 +39,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Loading history from the API on mount is what effects are for; the state
-    // update happens in the async callback, not synchronously in the body.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refreshRuns();
   }, [refreshRuns]);
 
@@ -99,8 +96,6 @@ export default function Home() {
         sourceType === "url" ? url : text,
         tone,
       );
-      // Keep the tone the user asked for; the run's own tone is just the one it
-      // was first created with.
       loadIntoPanes(created, true);
       await refreshRuns();
     } catch (e) {
@@ -131,10 +126,7 @@ export default function Home() {
   }
 
   const posts = run?.posts_by_tone?.[tone] ?? null;
-
-  // The current input already has posts at this tone, so Generate has nothing
-  // to do. Regenerate is the button that produces different words, and it is
-  // the one that costs budget.
+  
   const sourceUnchanged =
     run !== null &&
     run.source_type === sourceType &&

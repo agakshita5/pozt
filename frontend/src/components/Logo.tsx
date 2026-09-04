@@ -1,7 +1,3 @@
-/**
- * One source fanning out to four destinations: a filled square on the left,
- * four hairlines out to four small squares on the right.
- */
 export function LogoMark({ className = "" }: { className?: string }) {
   return (
     <svg
