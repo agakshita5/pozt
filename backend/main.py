@@ -1,6 +1,8 @@
 import logging
 import os
+import time
 import uuid
+from collections import defaultdict, deque
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -9,10 +11,11 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 # noqa: E402
-from fastapi import FastAPI, HTTPException, Request  
+from fastapi import Depends, FastAPI, HTTPException, Request  
 from fastapi.exceptions import RequestValidationError  
 from fastapi.middleware.cors import CORSMiddleware  
 from fastapi.responses import JSONResponse  
+import auth  
 import db  
 import generate 
 from extract import ExtractionError, derive_title, extract_from_url, truncate 
@@ -22,6 +25,7 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    auth.configure()
     db.init()
     yield
 
@@ -45,6 +49,49 @@ async def catch_unhandled(request: Request, call_next):
             status_code=500,
             content={"detail": "Something went wrong on our end. Try again in a moment."},
         )
+
+# a 15,000 character article is at most ~60 KB of UTF-8
+MAX_BODY_BYTES = int(os.getenv("MAX_BODY_BYTES", 256_000))
+
+# generating costs tokens, so it is metered per signed-in account
+RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", 10))
+RATE_LIMIT_PER_DAY = int(os.getenv("RATE_LIMIT_PER_DAY", 40))
+_hits: dict[str, deque[float]] = defaultdict(deque)
+
+def _check_quota(user_id: str) -> None:
+    message = _too_many(user_id)
+    if message:
+        log.warning("rate limited %s", user_id)
+        raise HTTPException(429, message)
+
+def _too_many(user_id: str) -> str | None:
+    now = time.time()
+    seen = _hits[user_id]
+    while seen and now - seen[0] > 86_400:
+        seen.popleft()
+    if len(seen) >= RATE_LIMIT_PER_DAY:
+        return "You have hit today's generation limit. Try again tomorrow."
+    if sum(1 for t in seen if now - t < 3_600) >= RATE_LIMIT_PER_HOUR:
+        return "You have hit this hour's generation limit. Try again in an hour."
+    return None
+
+# only a real model call spends the quota, so only that is counted
+def _record(user_id: str) -> None:
+    now = time.time()
+    _hits[user_id].append(now)
+    if len(_hits) > 10_000:
+        for key in [k for k, v in _hits.items() if not v or now - v[-1] > 86_400]:
+            del _hits[key]
+
+@app.middleware("http")
+async def guard(request: Request, call_next):
+    length = request.headers.get("content-length")
+    if length and length.isdigit() and int(length) > MAX_BODY_BYTES:
+        return JSONResponse(
+            status_code=413,
+            content={"detail": "That is far too much text to send at once."},
+        )
+    return await call_next(request)
 
 app.add_middleware(
     CORSMiddleware,
@@ -90,33 +137,35 @@ async def health() -> dict:
     return {"ok": True, "model": generate.MODEL}
 
 @app.get("/api/runs", response_model=list[RunSummary])
-async def get_runs() -> list[RunSummary]:
-    return [RunSummary(**r) for r in db.list_runs()]
+async def get_runs(user: str = Depends(auth.current_user)) -> list[RunSummary]:
+    return [RunSummary(**r) for r in db.list_runs(user)]
 
 @app.get("/api/runs/{run_id}", response_model=Run)
-async def get_run(run_id: str) -> Run:
-    run = db.get_run(run_id)
+async def get_run(run_id: str, user: str = Depends(auth.current_user)) -> Run:
+    run = db.get_run(run_id, user)
     if run is None:
         raise HTTPException(404, "No such run.")
     return _run_model(run)
 
 @app.delete("/api/runs/{run_id}")
-async def remove_run(run_id: str) -> dict:
-    if not db.delete_run(run_id):
+async def remove_run(run_id: str, user: str = Depends(auth.current_user)) -> dict:
+    if not db.delete_run(run_id, user):
         raise HTTPException(404, "No such run.")
     return {"deleted": run_id}
 
 @app.post("/api/runs", response_model=Run)
-async def create_run(req: GenerateRequest) -> Run:
+async def create_run(req: GenerateRequest, user: str = Depends(auth.current_user)) -> Run:
     source = req.source.strip()
     if not source:
         raise HTTPException(422, "Give me a URL or some text to work with.")
 
-    existing = db.find_run_by_source(req.source_type, source)
+    existing = db.find_run_by_source(user, req.source_type, source)
+    if existing is not None and db.has_tone(existing["id"], req.tone):
+        return _run_model(existing)
+
+    _check_quota(user)
 
     if existing is not None:
-        if db.has_tone(existing["id"], req.tone):
-            return _run_model(existing)
         run_id, title, text = existing["id"], existing["title"], existing["extracted_text"]
     else:
         if req.source_type == "url":
@@ -136,23 +185,24 @@ async def create_run(req: GenerateRequest) -> Run:
             title = derive_title(text)
         run_id = uuid.uuid4().hex[:12]
 
+    _record(user)
     try:
         results = await generate.generate_all(title, text, req.tone)
     except generate.GenerationError as exc:
         raise HTTPException(exc.status, str(exc)) from exc
 
     if existing is None:
-        db.insert_run(run_id, title, req.source_type, source, text, truncated, req.tone)
+        db.insert_run(run_id, user, title, req.source_type, source, text, truncated, req.tone)
     for platform, (payload, over_limit) in results.items():
         db.upsert_post(run_id, platform, req.tone, payload, over_limit)
 
-    run = db.get_run(run_id)
+    run = db.get_run(run_id, user)
     assert run is not None
     return _run_model(run)
 
 @app.post("/api/runs/{run_id}/regenerate", response_model=Post)
-async def regenerate(run_id: str, req: RegenerateRequest) -> Post:
-    run = db.get_run(run_id)
+async def regenerate(run_id: str, req: RegenerateRequest, user: str = Depends(auth.current_user)) -> Post:
+    run = db.get_run(run_id, user)
     if run is None:
         raise HTTPException(404, "No such run.")
 
@@ -164,6 +214,8 @@ async def regenerate(run_id: str, req: RegenerateRequest) -> Post:
             f"'{req.tone}' tone. Pick a different tone to start a fresh set.",
         )
 
+    _check_quota(user)
+    _record(user)
     try:
         payload, over_limit = await generate.generate_one(
             req.platform, run["title"], run["extracted_text"], req.tone
