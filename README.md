@@ -44,9 +44,11 @@ refuses to start without the second unless `AUTH_DEV_BYPASS=1`. `GROQ_MODEL`
 defaults to `openai/gpt-oss-120b` (`openai/gpt-oss-20b` is the cheaper
 fallback). Rate limits, body size and `DB_PATH` are in `.env.example`.
 
-`frontend/.env.local` — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and
-`CLERK_SECRET_KEY` are required; `NEXT_PUBLIC_API_BASE` only if the backend is
-not on port 8000.
+`frontend/.env.local` — `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`,
+`CLERK_SECRET_KEY` and `BACKEND_ORIGIN` are required. The browser never calls
+the backend directly: it calls `/api/backend/*` on this site, and the route
+handler there forwards to `BACKEND_ORIGIN` server side, so the backend's
+address stays out of the bundle.
 
 Clerk gates `/studio` only, so the landing page stays open to anyone with the
 link. History is scoped to the verified user id, and generation is measured per
