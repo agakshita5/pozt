@@ -10,7 +10,7 @@ export default function Landing() {
 
       <section className="mx-auto max-w px-6 pb-8 pt-24 text-center lg:pt-32">
         <h1 className="font-display text-[44px] font-semibold leading-[1.03] tracking-[-0.025em] sm:text-[64px]">
-          Multi platforms. One paste.
+          Multiple platforms. One paste.
         </h1>
 
         <p className="mx-auto mt-6 max-w text-[17px] leading-relaxed text-muted">
