@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
     db.init()
     yield
 
-app = FastAPI(title="Blog to Social Post Studio", lifespan=lifespan)
+app = FastAPI(title="PoZt", lifespan=lifespan)
 
 ALLOWED_ORIGINS = [
     o.strip()

@@ -49,7 +49,7 @@ export default function Sidebar({
       }`}
     >
       <div className="flex h-15 shrink-0 items-center gap-2 border-b border-line px-3">
-        <Link href="/" title="Post Studio home" className="flex items-center">
+        <Link href="/" title="PoZt home" className="flex items-center">
           <LogoMark className="text-cobalt" />
         </Link>
         {!collapsed && (
